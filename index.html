@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Farbspur Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: one-screen game app. Top bar, then one of three screens: lobby (two cards), arena (canvas + live ranking), results. */
+:root{
+  --bg:#e8ebf2; --panel:#ffffff; --ink:#141932; --muted:#5b6382; --line:#d4d9e6;
+  --floor:#f8f9fc; --floor-grid:#e7eaf2; --accent:#ff2f78; --accent-ink:#ffffff; --good:#14915c; --warn:#b4560a;
+  --font-display:"Bungee","Arial Black",system-ui,sans-serif;
+  --font-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --radius:14px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e1121; --panel:#171b32; --ink:#eef0fa; --muted:#9aa1c4; --line:#2a3052;
+    --floor:#1b1f3c; --floor-grid:#242a4c; --accent:#ff5592; --accent-ink:#ffffff; --good:#3fd18f; --warn:#f0a35c;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45}
+.app{height:100%;display:flex;flex-direction:column;gap:14px;padding-block:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  max-width:1280px;margin:0 auto}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{font-family:var(--font-display);font-size:26px;letter-spacing:.02em;line-height:1;display:flex;gap:2px}
+.brand span:nth-child(1){color:#e8344f}.brand span:nth-child(2){color:#f29a12}.brand span:nth-child(3){color:#16a86a}
+.brand span:nth-child(4){color:#2c7be5}.brand span:nth-child(5){color:#9b4de0}.brand span:nth-child(6){color:var(--accent)}
+.brand span:nth-child(n+7){color:var(--ink)}
+.pill{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--panel);border:1px solid var(--line);color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.live .dot{background:var(--good)}
+.spacer{flex:1}
+.timer{font-family:var(--font-display);font-size:30px;line-height:1;font-variant-numeric:tabular-nums;min-width:3.2ch;text-align:right}
+.timer.hot{color:var(--accent)}
+.banner{background:var(--panel);border:1.5px solid var(--warn);color:var(--ink);border-radius:12px;padding:12px 16px;font-size:14px}
+.banner b{color:var(--warn)}
+main{flex:1;min-height:0;display:flex}
+section{flex:1;min-height:0;min-width:0}
+
+/* Lobby */
+.lobby{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;align-content:start;overflow:auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+h1,h2{margin:0;text-wrap:balance}
+h1{font-family:var(--font-display);font-weight:400;font-size:28px;line-height:1.1}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}
+p{margin:0}
+.rules{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:var(--muted)}
+.rules b{color:var(--ink)}
+form.row-form{display:flex;gap:8px;flex-wrap:wrap}
+label.lbl{font-weight:600;font-size:13px;width:100%}
+input[type=text],input[type=password]{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+input:focus{outline:none;border-color:var(--accent)}
+button{font:inherit;font-weight:800;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;background:var(--ink);color:var(--panel)}
+button.primary{background:var(--accent);color:var(--accent-ink);font-size:17px;padding:14px 22px}
+button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+details summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600}
+details[open] summary{margin-bottom:8px}
+.err{color:var(--accent);font-size:13px;font-weight:600}
+.me{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--bg)}
+.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:22px;flex:none;box-shadow:0 0 0 3px var(--panel)}
+.av.sm{width:30px;height:30px;font-size:16px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.players{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.players li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--bg);min-width:0}
+.players .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.count{font-family:var(--font-display);font-size:22px;font-variant-numeric:tabular-nums}
+.hostbox{display:flex;flex-direction:column;gap:10px;padding-top:6px;border-top:1px solid var(--line)}
+
+/* Arena */
+.game{display:grid;grid-template-columns:minmax(0,1fr) 230px;grid-template-rows:minmax(0,1fr);gap:14px}
+.arena-wrap{position:relative;min-width:0;min-height:0;display:grid;place-items:center}
+canvas#arena{display:block;border-radius:12px;box-shadow:0 0 0 1px var(--line),0 10px 30px rgba(10,15,40,.12)}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.big{font-family:var(--font-display);font-size:clamp(60px,14vw,150px);color:var(--accent);text-shadow:0 4px 0 var(--panel)}
+.msg{background:var(--panel);border:1px solid var(--line);padding:12px 18px;border-radius:12px;font-weight:600}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0;overflow:auto}
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rank li{display:grid;grid-template-columns:20px 30px minmax(0,1fr) auto;align-items:center;gap:8px;font-size:14px}
+.rank .n{color:var(--muted);font-variant-numeric:tabular-nums;font-weight:800;font-size:12px}
+.rank .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.rank .pc{font-variant-numeric:tabular-nums;font-weight:800}
+.rank li.you .nm{color:var(--accent)}
+.keys{display:grid;grid-template-columns:repeat(3,28px);gap:4px;justify-content:start}
+.keys span{height:28px;border-radius:6px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-size:13px}
+
+/* Results */
+.results{overflow:auto;display:flex;justify-content:center}
+.res{width:100%;max-width:760px;display:flex;flex-direction:column;gap:16px}
+.winner{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.winner .av{width:72px;height:72px;font-size:40px}
+.winner .pct{font-family:var(--font-display);font-size:44px;line-height:1;margin-left:auto}
+.table{display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:28px 30px minmax(70px,150px) minmax(0,1fr) 64px;align-items:center;gap:10px}
+.row .n{font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.row .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:14px;border-radius:7px;background:var(--bg);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:7px}
+.row .pc{text-align:right;font-variant-numeric:tabular-nums;font-weight:800}
+.row.empty .nm,.row.empty .pc{color:var(--muted);font-weight:600}
+
+@media (max-width:820px){
+  .lobby{grid-template-columns:1fr}
+  .game{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+  .side{max-height:30vh}
+  .row{grid-template-columns:24px 30px minmax(60px,1fr) 64px}
+  .row .bar{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand" aria-label="Farbspur"><span>F</span><span>A</span><span>R</span><span>B</span><span>S</span><span>P</span><span>U</span><span>R</span></div>
+    <span class="pill" id="conn"><i class="dot"></i><span id="connTxt">Verbinde …</span></span>
+    <span class="spacer"></span>
+    <span class="timer" id="timer" hidden>1:00</span>
+  </header>
+
+  <div class="banner" id="setupMsg" hidden></div>
+
+  <main>
+    <!-- LOBBY -->
+    <section class="lobby" id="lobby">
+      <div class="card">
+        <h1>Wer malt die größte Fläche?</h1>
+        <ul class="rules">
+          <li>Du bekommst ein <b>zufälliges Tier</b> und eine <b>eigene Farbe</b>.</li>
+          <li>Lauf mit den <b>Pfeiltasten</b> über das Feld. Du ziehst eine Farbspur hinter dir her.</li>
+          <li>Fremde Farbe übermalst du einfach. Deine kann auch übermalt werden.</li>
+          <li>Eine Runde dauert <b>60 Sekunden</b>. Es gewinnt, wer am Ende den größten Anteil der Fläche hat.</li>
+        </ul>
+        <form class="row-form" id="joinForm" autocomplete="off">
+          <label class="lbl" for="nameInput">Dein Name (erscheint unter deinem Avatar)</label>
+          <input type="text" id="nameInput" maxlength="16" placeholder="z. B. Kai" required>
+          <button type="submit" id="joinBtn">Mitspielen</button>
+        </form>
+        <div class="me" id="meBox" hidden>
+          <div class="av" id="meAv">?</div>
+          <div><div style="font-weight:800" id="meName"></div><div class="small muted" id="meInfo"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <h2 style="flex:1">Spieler im Raum</h2>
+          <span class="count" id="pCount">0/25</span>
+        </div>
+        <ul class="players" id="pList"></ul>
+        <p class="small muted" id="pEmpty">Noch niemand hat einen Namen eingegeben.</p>
+        <div class="hostbox">
+          <button class="primary" id="startBtn" hidden disabled>Runde starten</button>
+          <button class="ghost" id="takeBtn" hidden>Spielleitung übernehmen</button>
+          <p class="small muted" id="hostMsg">Warte, bis der Spielleiter die Runde startet.</p>
+          <details id="hostLogin">
+            <summary>Ich bin Spielleiter</summary>
+            <form class="row-form" id="hostForm" autocomplete="off">
+              <label class="lbl" for="hostCode">Spielleiter-Code</label>
+              <input type="password" id="hostCode" required>
+              <button type="submit">Anmelden</button>
+            </form>
+            <p class="err" id="hostErr" hidden></p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section class="game" id="game" hidden>
+      <div class="arena-wrap" id="arenaWrap">
+        <canvas id="arena" width="800" height="500" aria-label="Spielfeld"></canvas>
+        <div class="overlay"><div id="ovl"></div></div>
+      </div>
+      <aside class="card side">
+        <h2>Live-Stand</h2>
+        <ol class="rank" id="rank"></ol>
+        <div class="small muted" id="youInfo"></div>
+        <div class="keys" aria-hidden="true"><span style="visibility:hidden"></span><span>↑</span><span style="visibility:hidden"></span><span>←</span><span>↓</span><span>→</span></div>
+      </aside>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="results" id="results" hidden>
+      <div class="res">
+        <div class="card">
+          <h2>Gewinner dieser Runde</h2>
+          <div class="winner" id="winner"></div>
+        </div>
+        <div class="card">
+          <h2>Auswertung · Anteil an der Gesamtfläche</h2>
+          <div class="table" id="resTable"></div>
+          <p class="small muted" id="resNote"></p>
+        </div>
+        <div class="hostbox" style="border:0">
+          <button class="primary" id="againBtn" hidden>Zurück zur Lobby</button>
+          <p class="small muted" id="againMsg">Der Spielleiter kann eine neue Runde starten.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+const FB = "https://www.gstatic.com/firebasejs/10.12.2/";
+
+// ---------- constants ----------
+const W = 200, H = 125, R = 2.6, SPEED = 30, ROUND_MS = 60000, COUNT_MS = 3000, MAX = 25, SEND_MS = 70;
+const ANIMALS = ["🐶","🐱","🦊","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔","🐧","🦄","🐝","🐢","🐙","🦀","🐳","🦉","🦔","🐰","🐻","🦒","🦓","🐘","🦩","🐞"];
+function hsl2rgb(h, s, l){ s/=100; l/=100; const k=n=>(n+h/30)%12, a=s*Math.min(l,1-l);
+  const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1))); return [f(0),f(8),f(4)].map(v=>Math.round(v*255)); }
+const COLORS = Array.from({length:MAX}, (_, i) => {
+  const h = Math.round(((i * 7) % MAX) * 360 / MAX), l = i % 2 ? 40 : 56, rgb = hsl2rgb(h, 85, l);
+  return { rgb, css: `rgb(${rgb.join(",")})` };
+});
+
+// ---------- state ----------
+let backend = null;              // {solo, setMe, patchMe, setState, patchState, claimHost}
+let myUid = null, connected = false, hostCapable = false;
+let myName = "";
+try { myName = (localStorage.getItem("farbspur-name") || "").slice(0, 16); } catch (e) {}
+let joined = false;
+let players = {};                // uid -> {name,x,y,r}
+let S = { phase: "lobby", round: 0, endsAt: 0, hostUid: null, hostName: "", roster: {}, results: null };
+let serverOffset = 0;
+const now = () => Date.now() + serverOffset;
+let transKey = "", resultsWaitSince = 0, localResults = false;
+const grid = new Uint8Array(W * H), counts = new Int32Array(MAX + 1);
+const me = { x: W/2, y: H/2 };
+const lastPos = new Map(), shown = new Map();
+const keys = new Set();
+
+const gridCanvas = document.createElement("canvas"); gridCanvas.width = W; gridCanvas.height = H;
+const gctx = gridCanvas.getContext("2d"), img = gctx.createImageData(W, H);
+let gridDirty = true;
+const disc = []; const RI = Math.ceil(R);
+for (let dy = -RI; dy <= RI; dy++) for (let dx = -RI; dx <= RI; dx++) if (dx*dx + dy*dy <= R*R) disc.push([dx, dy]);
+
+const $ = id => document.getElementById(id);
+const clean = s => String(s ?? "").replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, "").trim().slice(0, 16);
+const pct = (v, d = 1) => v.toFixed(d).replace(".", ",") + " %";
+
+// ---------- helpers ----------
+const rosterList = () => Object.entries(S.roster || {}).map(([u, r]) => ({ u, ...r })).sort((a, b) => (a.o ?? 0) - (b.o ?? 0));
+const amHost = () => hostCapable && S.hostUid === myUid;
+const nameOf = u => clean(players[u]?.name) || (S.results ? "" : "…");
+
+// ---------- grid ----------
+function resetGrid(){ grid.fill(0); counts.fill(0); img.data.fill(0); gridDirty = true; }
+function stamp(owner, x, y){
+  const cx = Math.round(x), cy = Math.round(y), col = COLORS[owner - 1].rgb, d = img.data;
+  for (const [dx, dy] of disc){
+    const gx = cx + dx, gy = cy + dy;
+    if (gx < 0 || gy < 0 || gx >= W || gy >= H) continue;
+    const i = gy * W + gx, old = grid[i];
+    if (old === owner) continue;
+    if (old) counts[old]--; counts[owner]++; grid[i] = owner;
+    const j = i * 4; d[j] = col[0]; d[j+1] = col[1]; d[j+2] = col[2]; d[j+3] = 255;
+    gridDirty = true;
+  }
+}
+function paintSeg(owner, x0, y0, x1, y1){
+  const dist = Math.hypot(x1 - x0, y1 - y0), steps = Math.max(1, Math.ceil(dist / 0.5));
+  for (let s = 1; s <= steps; s++){ const t = s / steps; stamp(owner, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t); }
+}
+
+// ---------- applying shared state ----------
+function startLocalRound(){
+  resetGrid(); lastPos.clear(); shown.clear(); localResults = false; resultsWaitSince = 0;
+  for (const r of rosterList()){ lastPos.set(r.u, { x: r.x, y: r.y }); shown.set(r.u, { x: r.x, y: r.y }); stamp(r.c + 1, r.x, r.y); }
+  const mine = S.roster?.[myUid];
+  if (mine){
+    const p = players[myUid];
+    if (p && p.r === S.round && typeof p.x === "number"){ me.x = p.x; me.y = p.y; }   // reload mid-round: keep position
+    else { me.x = mine.x; me.y = mine.y; }
+    sendPos(true);
+  }
+}
+function applyState(d){
+  d = d || {};
+  const roster = {};
+  if (d.roster && typeof d.roster === "object"){
+    for (const [u, r] of Object.entries(d.roster).slice(0, MAX)){
+      if (!r) continue;
+      roster[u] = { c: ((r.c | 0) % MAX + MAX) % MAX, a: ((r.a | 0) % ANIMALS.length + ANIMALS.length) % ANIMALS.length, x: +r.x || W/2, y: +r.y || H/2, o: r.o | 0 };
+    }
+  }
+  const round = d.round | 0, newRound = round !== S.round;
+  S = { phase: ["lobby","countdown","play","results"].includes(d.phase) ? d.phase : "lobby", round, endsAt: +d.endsAt || 0,
+        hostUid: typeof d.hostUid === "string" ? d.hostUid : null, hostName: clean(d.hostName), roster, results: d.results || null };
+  if ((S.phase === "countdown" || S.phase === "play") && newRound) startLocalRound();
+  if (S.phase === "results") localResults = false;
+  if (amHost() && S.phase === "lobby") syncRoster();
+  render();
+}
+
+// ---------- host actions ----------
+function canonical(ro){ return JSON.stringify(Object.keys(ro).sort().map(k => [k, ro[k].c, ro[k].a, ro[k].o])); }
+function syncRoster(){
+  if (!amHost() || S.phase !== "lobby") return;
+  const named = Object.entries(players).filter(([u, p]) => clean(p?.name)).sort((a, b) => (a[1].t || 0) - (b[1].t || 0));
+  const ids = new Set(named.map(([u]) => u));
+  const ro = {};
+  for (const [u, r] of Object.entries(S.roster)) if (ids.has(u)) ro[u] = { ...r };
+  const usedC = new Set(Object.values(ro).map(r => r.c)), usedA = new Set(Object.values(ro).map(r => r.a));
+  let o = Math.max(0, ...Object.values(ro).map(r => r.o + 1));
+  for (const [u] of named){
+    if (Object.keys(ro).length >= MAX) break;
+    if (ro[u]) continue;
+    const freeC = [...Array(MAX).keys()].filter(i => !usedC.has(i)), freeA = [...Array(ANIMALS.length).keys()].filter(i => !usedA.has(i));
+    const c = freeC[Math.floor(Math.random() * freeC.length)], a = freeA[Math.floor(Math.random() * freeA.length)];
+    usedC.add(c); usedA.add(a);
+    ro[u] = { c, a, x: W/2, y: H/2, o: o++ };
+  }
+  if (canonical(ro) !== canonical(S.roster)) backend.patchState({ roster: ro });
+}
+function startRound(){
+  if (!amHost() || S.phase !== "lobby") return;
+  const list = rosterList();
+  if (!list.length) return;
+  const ro = {}, n = list.length, off = Math.random() * Math.PI * 2;
+  const order = list.map((_, i) => i).sort(() => Math.random() - .5);
+  order.forEach((li, k) => {
+    const r = list[li], ang = off + k * 2 * Math.PI / n, rad = n === 1 ? 0 : (k % 2 ? .62 : .82);
+    ro[r.u] = { c: r.c, a: r.a, o: r.o, x: Math.round(W/2 + Math.cos(ang) * (W/2 - 10) * rad), y: Math.round(H/2 + Math.sin(ang) * (H/2 - 8) * rad) };
+  });
+  backend.setState({ phase: "countdown", round: S.round + 1, endsAt: now() + COUNT_MS, hostUid: myUid, hostName: myName || "Spielleiter", roster: ro, results: null });
+}
+function computeResults(){
+  const total = W * H; let painted = 0;
+  const rows = rosterList().map(r => { painted += counts[r.c + 1]; return { n: clean(players[r.u]?.name) || "Spieler", c: r.c, a: r.a, p: Math.round(counts[r.c + 1] / total * 1000) }; })
+    .sort((a, b) => b.p - a.p);
+  return { rows, empty: Math.round((total - painted) / total * 1000) };
+}
+function backToLobby(){ if (amHost()) backend.patchState({ phase: "lobby", results: null, endsAt: 0 }); }
+function takeOver(){ if (hostCapable) backend.patchState({ hostUid: myUid, hostName: myName || "Spielleiter" }); }
+
+// ---------- my position ----------
+let lastSendAt = 0, lastSentKey = "";
+function sendPos(force){
+  if (!joined) return;
+  const t = performance.now();
+  if (!force && t - lastSendAt < SEND_MS) return;
+  const p = { x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, r: S.round };
+  const k = p.x + "," + p.y + "," + p.r;
+  if (!force && k === lastSentKey) return;
+  lastSendAt = t; lastSentKey = k;
+  backend.patchMe(p);
+}
+
+// ---------- input ----------
+const DIRS = { ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0], w:[0,-1], s:[0,1], a:[-1,0], d:[1,0] };
+addEventListener("keydown", e => {
+  if (e.target && e.target.tagName === "INPUT") return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (DIRS[k]){ keys.add(k); if (S.phase !== "lobby") e.preventDefault(); }
+});
+addEventListener("keyup", e => { keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); });
+addEventListener("blur", () => keys.clear());
+
+$("joinForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const n = clean($("nameInput").value);
+  if (!n || !backend) return;
+  myName = n;
+  try { localStorage.setItem("farbspur-name", n); } catch (err) {}
+  joined = true;
+  backend.setMe({ name: n, x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, r: S.round, t: now() });
+  if (amHost() && !backend.solo) backend.patchState({ hostName: n });
+  $("nameInput").blur();
+  render();
+});
+$("hostForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const code = $("hostCode").value;
+  $("hostErr").hidden = true;
+  try {
+    await backend.claimHost(code);
+    hostCapable = true; $("hostCode").value = ""; $("hostLogin").open = false;
+    if (!S.hostUid || S.phase === "lobby") takeOver();
+    render();
+  } catch (err) {
+    $("hostErr").textContent = "Der Code stimmt nicht. Prüfe Groß- und Kleinschreibung.";
+    $("hostErr").hidden = false;
+  }
+});
+$("startBtn").addEventListener("click", startRound);
+$("againBtn").addEventListener("click", backToLobby);
+$("takeBtn").addEventListener("click", takeOver);
+
+// ---------- canvas ----------
+const cv = $("arena"), ctx = cv.getContext("2d");
+let scale = 4, theme = {};
+function readTheme(){
+  const cs = getComputedStyle(document.documentElement);
+  theme = { floor: cs.getPropertyValue("--floor").trim(), gridc: cs.getPropertyValue("--floor-grid").trim(),
+    ink: cs.getPropertyValue("--ink").trim(), panel: cs.getPropertyValue("--panel").trim(), accent: cs.getPropertyValue("--accent").trim() };
+}
+function fit(){
+  const wrap = $("arenaWrap"), bw = wrap.clientWidth, bh = wrap.clientHeight;
+  if (!bw || !bh) return;
+  scale = Math.max(1, Math.min(bw / W, bh / H));
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.width = Math.floor(W * scale) + "px"; cv.style.height = Math.floor(H * scale) + "px";
+  cv.width = Math.floor(W * scale * dpr); cv.height = Math.floor(H * scale * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+new ResizeObserver(fit).observe($("arenaWrap"));
+readTheme();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readTheme);
+
+function draw(){
+  const w = W * scale, h = H * scale;
+  ctx.fillStyle = theme.floor; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = theme.gridc; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 10; x < W; x += 10){ ctx.moveTo(x * scale + .5, 0); ctx.lineTo(x * scale + .5, h); }
+  for (let y = 10; y < H; y += 10){ ctx.moveTo(0, y * scale + .5); ctx.lineTo(w, y * scale + .5); }
+  ctx.stroke();
+  if (gridDirty){ gctx.putImageData(img, 0, 0); gridDirty = false; }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(gridCanvas, 0, 0, w, h);
+  const ar = Math.max(11, R * scale * 1.15);
+  for (const r of rosterList()){
+    const isMe = r.u === myUid, pos = isMe ? me : (shown.get(r.u) || r);
+    const px = pos.x * scale, py = pos.y * scale;
+    ctx.beginPath(); ctx.arc(px, py, ar, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS[r.c].css; ctx.fill();
+    ctx.lineWidth = isMe ? 3 : 2; ctx.strokeStyle = isMe ? theme.ink : theme.panel; ctx.stroke();
+    ctx.font = `${Math.round(ar * 1.15)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(ANIMALS[r.a], px, py + 1);
+    const nm = (clean(players[r.u]?.name) || "…") + (isMe ? " (du)" : "");
+    ctx.font = `600 11px Figtree, system-ui, sans-serif`;
+    const tw = ctx.measureText(nm).width + 10, ty = py + ar + 10;
+    ctx.globalAlpha = .85; ctx.fillStyle = theme.panel; ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(px - tw/2, ty - 8, tw, 16, 8); else ctx.rect(px - tw/2, ty - 8, tw, 16);
+    ctx.fill(); ctx.globalAlpha = 1; ctx.fillStyle = isMe ? theme.accent : theme.ink;
+    ctx.fillText(nm, px, ty + .5);
+  }
+}
+
+// ---------- main loop ----------
+let prevT = performance.now(), lastUi = 0;
+function tick(t){
+  const dt = Math.min(0.05, (t - prevT) / 1000); prevT = t;
+  const n = now();
+  if (S.phase === "play"){
+    const mine = S.roster[myUid];
+    if (mine && joined && n < S.endsAt){
+      let dx = 0, dy = 0;
+      for (const k of keys){ dx += DIRS[k][0]; dy += DIRS[k][1]; }
+      if (dx || dy){
+        const len = Math.hypot(dx, dy);
+        const nx = Math.min(W - 1, Math.max(0, me.x + dx / len * SPEED * dt)), ny = Math.min(H - 1, Math.max(0, me.y + dy / len * SPEED * dt));
+        paintSeg(mine.c + 1, me.x, me.y, nx, ny);
+        me.x = nx; me.y = ny;
+        sendPos(false);
+      }
+    }
+    // smooth display of the other avatars
+    for (const r of rosterList()){
+      if (r.u === myUid) continue;
+      const target = lastPos.get(r.u), s = shown.get(r.u);
+      if (!target || !s) continue;
+      const k = Math.min(1, dt * 14);
+      s.x += (target.x - s.x) * k; s.y += (target.y - s.y) * k;
+    }
+  }
+  if (amHost()){
+    const key = S.round + ":" + S.phase;
+    if (S.phase === "countdown" && n >= S.endsAt && transKey !== key){ transKey = key; backend.patchState({ phase: "play", endsAt: now() + ROUND_MS }); }
+    else if (S.phase === "play" && n >= S.endsAt && transKey !== key){
+      transKey = key;
+      setTimeout(() => { if (amHost() && S.phase === "play") backend.patchState({ phase: "results", results: computeResults() }); }, 700);
+    }
+  } else if (S.phase === "play" && n >= S.endsAt && S.endsAt){
+    if (!resultsWaitSince) resultsWaitSince = performance.now();
+    if (performance.now() - resultsWaitSince > 5000 && !localResults){ localResults = true; S.results = computeResults(); S.phase = "results"; render(); }
+  }
+  if (S.phase === "countdown" || S.phase === "play") draw();
+  if (t - lastUi > 200){ lastUi = t; uiTick(n); }
+  requestAnimationFrame(tick);
+}
+
+// other players' movement arrives here
+function onPlayers(val){
+  players = val && typeof val === "object" ? val : {};
+  if (S.phase === "play"){
+    for (const r of rosterList()){
+      if (r.u === myUid) continue;
+      const p = players[r.u];
+      if (!p || p.r !== S.round || typeof p.x !== "number" || typeof p.y !== "number") continue;
+      const x = Math.min(W - 1, Math.max(0, p.x)), y = Math.min(H - 1, Math.max(0, p.y));
+      const lp = lastPos.get(r.u) || { x, y };
+      if (lp.x !== x || lp.y !== y){
+        if (Math.hypot(x - lp.x, y - lp.y) < 45) paintSeg(r.c + 1, lp.x, lp.y, x, y);
+        else shown.set(r.u, { x, y });
+        lastPos.set(r.u, { x, y });
+      }
+    }
+  }
+  if (amHost() && S.phase === "lobby") syncRoster();
+  if (S.phase === "lobby") renderLobby();
+  renderConn();
+}
+
+// ---------- UI ----------
+function avatarEl(c, a, cls){
+  const d = document.createElement("div"); d.className = "av" + (cls ? " " + cls : "");
+  d.style.background = COLORS[c].css; d.textContent = ANIMALS[a]; return d;
+}
+function show(id){ for (const s of ["lobby","game","results"]) $(s).hidden = s !== id; if (id === "game") requestAnimationFrame(fit); }
+function render(){
+  const screen = S.phase === "lobby" ? "lobby" : S.phase === "results" ? "results" : "game";
+  show(screen);
+  $("timer").hidden = screen !== "game";
+  if (screen === "lobby") renderLobby();
+  if (screen === "results") renderResults();
+  renderConn();
+}
+function renderConn(){
+  const pill = $("conn");
+  if (!backend){ pill.classList.remove("live"); $("connTxt").textContent = "Verbinde …"; return; }
+  if (backend.solo){ pill.classList.remove("live"); $("connTxt").textContent = "Solo-Testmodus"; return; }
+  pill.classList.toggle("live", connected);
+  const online = Object.values(players).filter(p => clean(p?.name)).length;
+  $("connTxt").textContent = connected ? `Live · ${online} ${online === 1 ? "Spieler" : "Spieler"} online` : "Verbinde …";
+}
+function renderLobby(){
+  if (document.activeElement !== $("nameInput") && myName && !$("nameInput").value) $("nameInput").value = myName;
+  $("joinBtn").textContent = joined ? "Namen ändern" : "Mitspielen";
+  $("joinBtn").disabled = !backend;
+  const list = rosterList(), mine = S.roster[myUid];
+  $("meBox").hidden = !joined;
+  $("meName").textContent = myName;
+  const meAv = $("meAv");
+  if (mine){ meAv.style.background = COLORS[mine.c].css; meAv.textContent = ANIMALS[mine.a]; $("meInfo").textContent = "Das ist dein Avatar und deine Farbe."; }
+  else {
+    meAv.style.background = "var(--line)"; meAv.textContent = "?";
+    const namedCount = Object.values(players).filter(p => clean(p?.name)).length;
+    $("meInfo").textContent = namedCount > MAX && list.length >= MAX ? "Die Runde ist voll (25). Du schaust zu."
+      : S.hostUid ? "Avatar wird zugewiesen …" : "Du bekommst deinen Avatar, sobald der Spielleiter da ist.";
+  }
+  const ul = $("pList"); ul.replaceChildren();
+  for (const r of list){
+    const li = document.createElement("li");
+    li.append(avatarEl(r.c, r.a, "sm"));
+    const nm = document.createElement("span"); nm.className = "nm";
+    nm.textContent = (clean(players[r.u]?.name) || "…") + (r.u === myUid ? " (du)" : "");
+    li.append(nm); ul.append(li);
+  }
+  $("pCount").textContent = `${list.length}/${MAX}`;
+  $("pEmpty").hidden = list.length > 0;
+  const h = amHost();
+  $("startBtn").hidden = !h;
+  $("startBtn").disabled = !list.length;
+  $("takeBtn").hidden = !(hostCapable && !h);
+  $("hostLogin").hidden = hostCapable || !backend || backend.solo;
+  $("hostMsg").textContent = h
+    ? (list.length ? (backend.solo ? "Testmodus ohne Firebase: Du spielst allein." : "Du bist Spielleiter. Starte, sobald alle drin sind.") : "Noch keine Spieler. Gib selbst einen Namen ein, wenn du mitspielen willst.")
+    : S.hostUid ? `Spielleiter: ${S.hostName || "verbunden"}. Warte, bis die Runde startet.` : "Noch kein Spielleiter angemeldet.";
+}
+function renderResults(){
+  const res = S.results || { rows: [], empty: 1000 };
+  const rows = Array.isArray(res.rows) ? res.rows : Object.values(res.rows || {});
+  const win = $("winner"); win.replaceChildren();
+  const top = rows[0];
+  if (top && top.p > 0){
+    win.append(avatarEl(top.c | 0, top.a | 0));
+    const box = document.createElement("div");
+    const h = document.createElement("h1"); h.textContent = clean(top.n);
+    const tie = rows.filter(r => r.p === top.p).length > 1;
+    const s = document.createElement("div"); s.className = "muted"; s.textContent = tie ? "Gleichstand an der Spitze" : "hat die größte Fläche markiert";
+    box.append(h, s); win.append(box);
+    const p = document.createElement("div"); p.className = "pct"; p.style.color = COLORS[top.c | 0].css; p.textContent = pct(top.p / 10);
+    win.append(p);
+  } else { const p = document.createElement("p"); p.className = "muted"; p.textContent = "Niemand hat Farbe aufs Feld gebracht."; win.append(p); }
+  const tb = $("resTable"); tb.replaceChildren();
+  const maxV = Math.max(1, ...rows.map(r => r.p | 0));
+  rows.forEach((r, i) => {
+    const row = document.createElement("div"); row.className = "row";
+    const n = document.createElement("span"); n.className = "n"; n.textContent = (i + 1) + ".";
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = clean(r.n);
+    const bar = document.createElement("div"); bar.className = "bar"; const bi = document.createElement("i");
+    bi.style.width = ((r.p | 0) / maxV * 100) + "%"; bi.style.background = COLORS[r.c | 0].css; bar.append(bi);
+    const pc = document.createElement("span"); pc.className = "pc"; pc.textContent = pct((r.p | 0) / 10);
+    row.append(n, avatarEl(r.c | 0, r.a | 0, "sm"), nm, bar, pc); tb.append(row);
+  });
+  const er = document.createElement("div"); er.className = "row empty";
+  const e3 = document.createElement("span"); e3.className = "nm"; e3.textContent = "Unbemalt";
+  const e4 = document.createElement("div"); e4.className = "bar";
+  const e5 = document.createElement("span"); e5.className = "pc"; e5.textContent = pct((res.empty | 0) / 10);
+  er.append(document.createElement("span"), document.createElement("span"), e3, e4, e5); tb.append(er);
+  $("resNote").textContent = localResults ? "Vorläufige Auswertung aus deiner Sicht: Die Ergebnisse des Spielleiters sind nicht angekommen."
+    : `Spielfeld: ${W} × ${H} Felder. Prozentwerte gerundet auf eine Nachkommastelle.`;
+  $("againBtn").hidden = !amHost();
+  $("againMsg").hidden = amHost();
+}
+function uiTick(n){
+  renderConn();
+  if (S.phase !== "countdown" && S.phase !== "play") return;
+  const left = Math.max(0, S.endsAt - n), t = $("timer");
+  const sec = S.phase === "play" ? Math.ceil(left / 1000) : 60;
+  t.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  t.classList.toggle("hot", S.phase === "play" && sec <= 10);
+  const ov = $("ovl");
+  if (S.phase === "countdown"){ ov.className = "big"; ov.textContent = String(Math.max(1, Math.ceil(left / 1000))); }
+  else if (left > ROUND_MS - 900){ ov.className = "big"; ov.textContent = "LOS!"; }
+  else if (left <= 0){ ov.className = "msg"; ov.textContent = "Zeit um! Auswertung läuft …"; }
+  else { ov.className = ""; ov.textContent = ""; }
+  const total = W * H;
+  const rows = rosterList().map(r => ({ r, v: counts[r.c + 1] })).sort((a, b) => b.v - a.v);
+  const ol = $("rank"); ol.replaceChildren();
+  rows.slice(0, 10).forEach((x, i) => {
+    const li = document.createElement("li"); if (x.r.u === myUid) li.className = "you";
+    const nn = document.createElement("span"); nn.className = "n"; nn.textContent = i + 1;
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = clean(players[x.r.u]?.name) || "…";
+    const pc = document.createElement("span"); pc.className = "pc"; pc.textContent = pct(x.v / total * 100);
+    li.append(nn, avatarEl(x.r.c, x.r.a, "sm"), nm, pc); ol.append(li);
+  });
+  const mine = S.roster[myUid];
+  $("youInfo").textContent = mine
+    ? `Du: ${pct(counts[mine.c + 1] / total * 100)} · Platz ${rows.findIndex(x => x.r.u === myUid) + 1} von ${rows.length}`
+    : "Du schaust in dieser Runde zu.";
+}
+
+// ---------- backends ----------
+function soloBackend(){
+  myUid = "solo"; hostCapable = true;
+  return {
+    solo: true,
+    setMe(p){ players = { solo: { ...p } }; onPlayers(players); applyState({ ...S, hostUid: "solo", hostName: myName }); },
+    patchMe(p){ players.solo = { ...(players.solo || {}), ...p }; },
+    setState(s){ applyState(JSON.parse(JSON.stringify(s))); },
+    patchState(p){ applyState(JSON.parse(JSON.stringify({ ...S, ...p }))); },
+    async claimHost(){},
+  };
+}
+
+async function readConfig(){
+  const res = await fetch("config.js", { cache: "no-store" });
+  if (!res.ok) throw new Error("config.js fehlt");
+  const txt = await res.text();
+  const m = txt.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;?/);
+  if (!m) throw new Error("In config.js wurde kein firebaseConfig-Block gefunden.");
+  const cfg = new Function("return (" + m[1] + ");")();
+  if (!cfg.apiKey || /HIER/i.test(cfg.apiKey)) throw new Error("config.js ist noch nicht ausgefüllt.");
+  if (!cfg.databaseURL) throw new Error("In config.js fehlt die Zeile databaseURL.");
+  return cfg;
+}
+
+async function firebaseBackend(cfg){
+  const [{ initializeApp }, A, D] = await Promise.all([
+    import(FB + "firebase-app.js"), import(FB + "firebase-auth.js"), import(FB + "firebase-database.js")]);
+  const app = initializeApp(cfg);
+  const auth = A.getAuth(app), db = D.getDatabase(app);
+  const cred = await A.signInAnonymously(auth);
+  myUid = cred.user.uid;
+  const meRef = D.ref(db, "game/players/" + myUid), stRef = D.ref(db, "game/state");
+  try { const c = await D.get(D.ref(db, "hostClaims/" + myUid)); hostCapable = c.exists(); } catch (e) { hostCapable = false; }
+
+  D.onValue(D.ref(db, ".info/serverTimeOffset"), s => { serverOffset = s.val() || 0; });
+  D.onValue(D.ref(db, ".info/connected"), s => {
+    connected = !!s.val(); renderConn();
+    if (connected && joined){
+      D.onDisconnect(meRef).remove();
+      D.set(meRef, { name: myName, x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, r: S.round, t: now() }).catch(() => {});
+    }
+  });
+  D.onValue(D.ref(db, "game/players"), s => onPlayers(s.val()), err => showSetup("Lesen nicht erlaubt: Prüfe die Datenbank-Regeln (Schritt 2) und die anonyme Anmeldung (Schritt 3)."));
+  D.onValue(stRef, s => applyState(s.val()));
+
+  const warn = () => {};
+  return {
+    solo: false,
+    setMe(p){ D.onDisconnect(meRef).remove(); D.set(meRef, p).catch(e => showSetup("Speichern nicht erlaubt: Prüfe die Datenbank-Regeln (Schritt 2).")); },
+    patchMe(p){ D.update(meRef, p).catch(warn); },
+    setState(s){ D.set(stRef, s).catch(e => showSetup("Nur der Spielleiter darf die Runde steuern. Melde dich mit dem Spielleiter-Code an.")); },
+    patchState(p){ D.update(stRef, p).catch(e => showSetup("Nur der Spielleiter darf die Runde steuern. Melde dich mit dem Spielleiter-Code an.")); },
+    async claimHost(code){ await D.set(D.ref(db, "hostClaims/" + myUid), String(code)); },
+  };
+}
+
+function showSetup(html){ const b = $("setupMsg"); b.hidden = false; b.replaceChildren(); const s = document.createElement("b"); s.textContent = "Hinweis: "; b.append(s, document.createTextNode(html)); }
+
+// ---------- boot ----------
+render();
+requestAnimationFrame(t => { prevT = t; requestAnimationFrame(tick); });
+(async () => {
+  let cfg = null;
+  try { cfg = await readConfig(); }
+  catch (e) {
+    backend = soloBackend();
+    showSetup(e.message + " Bis dahin läuft das Spiel im Solo-Testmodus.");
+    backend.patchState({ hostUid: "solo", hostName: "" }); return;
+  }
+  try { backend = await firebaseBackend(cfg); }
+  catch (e) {
+    backend = soloBackend();
+    const msg = String(e && (e.code || e.message) || e);
+    showSetup(msg.includes("admin-restricted") || msg.includes("operation-not-allowed")
+      ? "Die anonyme Anmeldung ist in Firebase noch nicht eingeschaltet (Schritt 3). Solo-Testmodus aktiv."
+      : "Verbindung zu Firebase fehlgeschlagen (" + msg + "). Solo-Testmodus aktiv.");
+    backend.patchState({ hostUid: "solo", hostName: "" }); return;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
