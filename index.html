@@ -135,17 +135,17 @@ canvas#arena{display:block;border-radius:12px;box-shadow:0 0 0 1px var(--line),0
     <!-- LOBBY -->
     <section class="lobby" id="lobby">
       <div class="card">
-        <h1>Wer malt die größte Fläche?</h1>
+        <h1>Paint big or go home!</h1>
         <ul class="rules">
-          <li>Du bekommst ein <b>zufälliges Tier</b> und eine <b>eigene Farbe</b>.</li>
-          <li>Lauf mit den <b>Pfeiltasten</b> über das Feld. Du ziehst eine Farbspur hinter dir her.</li>
-          <li>Fremde Farbe übermalst du einfach. Deine kann auch übermalt werden.</li>
-          <li>Eine Runde dauert <b>60 Sekunden</b>. Es gewinnt, wer am Ende den größten Anteil der Fläche hat.</li>
+          <li>You get your dedicated <b>riding pet</b> and a nice <b>color!</b>.</li>
+          <li>Run with <b>arrowkeys</b> across the arena. Mark your path like a straying dog, ay!.</li>
+          <li>Cross other dudes or get crossed! You decide.</li>
+          <li>Round goes <b>60 seconds (earth time)</b>. Winner winner chicken dinner: Whoever got the biggest share!.</li>
         </ul>
         <form class="row-form" id="joinForm" autocomplete="off">
-          <label class="lbl" for="nameInput">Dein Name (erscheint unter deinem Avatar)</label>
+          <label class="lbl" for="nameInput">Your gangsta name (visible in the arena)</label>
           <input type="text" id="nameInput" maxlength="16" placeholder="z. B. Kai" required>
-          <button type="submit" id="joinBtn">Mitspielen</button>
+          <button type="submit" id="joinBtn">JOIN!</button>
         </form>
         <div class="me" id="meBox" hidden>
           <div class="av" id="meAv">?</div>
@@ -155,21 +155,21 @@ canvas#arena{display:block;border-radius:12px;box-shadow:0 0 0 1px var(--line),0
 
       <div class="card">
         <div style="display:flex;align-items:baseline;gap:10px">
-          <h2 style="flex:1">Spieler im Raum</h2>
+          <h2 style="flex:1">Enemies in the room</h2>
           <span class="count" id="pCount">0/25</span>
         </div>
         <ul class="players" id="pList"></ul>
         <p class="small muted" id="pEmpty">Noch niemand hat einen Namen eingegeben.</p>
         <div class="hostbox">
-          <button class="primary" id="startBtn" hidden disabled>Runde starten</button>
-          <button class="ghost" id="takeBtn" hidden>Spielleitung übernehmen</button>
-          <p class="small muted" id="hostMsg">Warte, bis der Spielleiter die Runde startet.</p>
+          <button class="primary" id="startBtn" hidden disabled>Start the battle</button>
+          <button class="ghost" id="takeBtn" hidden>Be the game master</button>
+          <p class="small muted" id="hostMsg">Wait for the game master.</p>
           <details id="hostLogin">
-            <summary>Ich bin Spielleiter</summary>
+            <summary>I'm the goddamn game master</summary>
             <form class="row-form" id="hostForm" autocomplete="off">
-              <label class="lbl" for="hostCode">Spielleiter-Code</label>
+              <label class="lbl" for="hostCode">game master codee</label>
               <input type="password" id="hostCode" required>
-              <button type="submit">Anmelden</button>
+              <button type="submit">Submit</button>
             </form>
             <p class="err" id="hostErr" hidden></p>
           </details>
@@ -184,7 +184,7 @@ canvas#arena{display:block;border-radius:12px;box-shadow:0 0 0 1px var(--line),0
         <div class="overlay"><div id="ovl"></div></div>
       </div>
       <aside class="card side">
-        <h2>Live-Stand</h2>
+        <h2>Live-points</h2>
         <ol class="rank" id="rank"></ol>
         <div class="small muted" id="youInfo"></div>
         <div class="keys" aria-hidden="true"><span style="visibility:hidden"></span><span>↑</span><span style="visibility:hidden"></span><span>←</span><span>↓</span><span>→</span></div>
@@ -195,17 +195,17 @@ canvas#arena{display:block;border-radius:12px;box-shadow:0 0 0 1px var(--line),0
     <section class="results" id="results" hidden>
       <div class="res">
         <div class="card">
-          <h2>Gewinner dieser Runde</h2>
+          <h2>WINNER</h2>
           <div class="winner" id="winner"></div>
         </div>
         <div class="card">
-          <h2>Auswertung · Anteil an der Gesamtfläche</h2>
+          <h2>Report · Percentage of the arena</h2>
           <div class="table" id="resTable"></div>
           <p class="small muted" id="resNote"></p>
         </div>
         <div class="hostbox" style="border:0">
-          <button class="primary" id="againBtn" hidden>Zurück zur Lobby</button>
-          <p class="small muted" id="againMsg">Der Spielleiter kann eine neue Runde starten.</p>
+          <button class="primary" id="againBtn" hidden>Back to the lobby</button>
+          <p class="small muted" id="againMsg">Game master can start a new round.</p>
         </div>
       </div>
     </section>
@@ -545,12 +545,12 @@ function renderLobby(){
   $("meBox").hidden = !joined;
   $("meName").textContent = myName;
   const meAv = $("meAv");
-  if (mine){ meAv.style.background = COLORS[mine.c].css; meAv.textContent = ANIMALS[mine.a]; $("meInfo").textContent = "Das ist dein Avatar und deine Farbe."; }
+  if (mine){ meAv.style.background = COLORS[mine.c].css; meAv.textContent = ANIMALS[mine.a]; $("meInfo").textContent = "Your riding pet and your color."; }
   else {
     meAv.style.background = "var(--line)"; meAv.textContent = "?";
     const namedCount = Object.values(players).filter(p => clean(p?.name)).length;
-    $("meInfo").textContent = namedCount > MAX && list.length >= MAX ? "Die Runde ist voll (25). Du schaust zu."
-      : S.hostUid ? "Avatar wird zugewiesen …" : "Du bekommst deinen Avatar, sobald der Spielleiter da ist.";
+    $("meInfo").textContent = namedCount > MAX && list.length >= MAX ? "Fully occupied (25). Watch and learn."
+      : S.hostUid ? "Avatar wird zugewiesen …" : "You will get your riding pet once the game master is there.";
   }
   const ul = $("pList"); ul.replaceChildren();
   for (const r of list){
